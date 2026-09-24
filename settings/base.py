@@ -17,9 +17,12 @@ DJANGO_AND_FRIENDS = [
     'django.contrib.staticfiles',
 ]
 PROJECT_APPS =[
+    "apps.auths.apps.AuthsConfig",
     "apps.blog.apps.BlogConfig",
 ]
 INSTALLED_APPS = DJANGO_AND_FRIENDS + PROJECT_APPS
+
+AUTH_USER_MODEL = "auths.User"  
 
 
 MIDDLEWARE = [
