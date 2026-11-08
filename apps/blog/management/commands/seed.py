@@ -92,7 +92,7 @@ class Command(BaseCommand):
         comments_count: int = options["comments"]
         posts_count: int = options["posts"]
 
-        if min(users_count, posts_count, comments_count) < 1:
+        if min(users_count, posts_count, comments_count) < 0:
             raise CommandError("Users, posts and comments must be greater than 0.")
 
         with transaction.atomic():
@@ -201,9 +201,9 @@ class Command(BaseCommand):
                 )
             )
 
-            User.objects.bulk_create(users)
+        User.objects.bulk_create(users)
 
-            return len(users)
+        return len(users)
 
     def create_categories(self) -> int:
                 existing_names = set(Category.objects.values_list("name", flat=True))
@@ -322,23 +322,23 @@ class Command(BaseCommand):
                 return len(posts)
     
     def create_comments(self, count: int, published_posts: list, users: list ) -> int:
-                fake = Faker()
+        fake = Faker()
     
-                comments = []
+        comments = []
     
-                for _ in range(count):
-                    sentences_count = random.randint(1, 3)
+        for _ in range(count):
+            sentences_count = random.randint(1, 3)
     
-                    body = " ".join(fake.sentences(nb = sentences_count))
+            body = " ".join(fake.sentences(nb = sentences_count))
     
-                    comments.append(
-                        Comment(
-                            post = random.choice(published_posts),
-                            author = random.choice(users),
-                            body = body
-                        )
-                    )
+            comments.append(
+                Comment(
+                post = random.choice(published_posts),
+                author = random.choice(users),
+                body = body
+            )
+        )
     
-                    Comment.objects.bulk_create(comments)
+        Comment.objects.bulk_create(comments)
     
-                    return len(comments)
+        return len(comments)
