@@ -1,10 +1,13 @@
-from unfold.admin import ModelAdmin
-from unfold.decorators import display
+from unfold.admin import ModelAdmin, TabularInline
+from unfold.decorators import display, action
 from unfold.sections import TableSection
 from unfold.contrib.filters.admin import (AutocompleteSelectFilter, RangeDateTimeFilter, ChoicesDropdownFilter, RelatedDropdownFilter, MultipleRelatedDropdownFilter)
+from unfold.contrib.forms.widgets import WysiwygWidget
 
-from django.contrib import admin
+from django.contrib import admin, messages
 from django.db.models import Count, Prefetch
+from django.shortcuts import redirect
+from django.db import models
 
 from apps.blog.models import Category, Tag, Post, Comment
 
@@ -85,6 +88,34 @@ class CommentAdmin(ModelAdmin):
             return obj.body[:50] +"..."
         return obj.body
 
+class CommentInline(TabularInline):
+    model = Comment
+
+    fields = [
+        "author",
+        "body",
+        "created_at"
+    ]
+
+    readonly_fields = [
+        "created_at"
+    ]
+
+    extra = 0
+    tab = True
+    per_page = 10
+    show_change_link = True
+
+class PostCommentSection(TableSection):
+    verbose_name = "Comments"
+    related_name = "comments"
+    fields = [
+        "author",
+        "body",
+        "created_at"
+    ]
+    
+
 @admin.register(Post)
 class PostAdmin(ModelAdmin):
     list_display = [
@@ -103,6 +134,64 @@ class PostAdmin(ModelAdmin):
         "author__email"
     ]
 
+    autocomplete_fields = [
+        "author",
+        "category",
+        "tags"
+    ]
+
+    fieldsets = (
+        ("Content", {
+            "classes":["tab"],
+            "fields": (
+                "title",
+                "slug",
+                "body",
+            )
+        }),
+        ("Classification", {
+            "classes": ["tab"],
+            "fields": (
+                "category",
+                "tags",
+                "status",
+            ),
+        }),
+        ("Meta", {
+            "classes": ["tab"],
+            "fields": (
+                "author",
+                "created_at",
+                "updated_at"
+            )
+        })
+    )
+
+    prepupulated_field = {
+        "slug": ("title",)
+    }
+
+    autocomplete_fields = [
+        "author",
+        "category",
+        "tags"
+    ]
+
+    readonly_fields = [
+        "created_at",
+        "updated_at"
+    ]
+
+    forfield_overrides = {
+        models.TextField: {
+            "widget": WysiwygWidget,
+        }
+    }
+
+    warn_unsaved_form = True
+
+    inlines = [CommentInline]
+
     list_filter =[
         ("status", ChoicesDropdownFilter),
         ("category", RelatedDropdownFilter),
@@ -111,23 +200,91 @@ class PostAdmin(ModelAdmin):
         ("created_at", RangeDateTimeFilter)
     ]
 
-    list_filter_submit = True
+    list_sections = [PostCommentSection]
+    list_per_page = 20
 
-    autocomplete_fields = [
-        "author",
-        "category",
-        "tags"
-    ]
+    list_filter_submit = True
 
     list_selected_related = [
         "author",
         "category"
     ]
 
+    actions_row = ["toggle_publish"]
+
+    @action(
+            description = "Publish / Unpublish",
+            icon = "publish"
+    )
+
+    def toggle_publish(self, request, object_id):
+        post = self.get_object(request, object_id)
+
+        if post is None:
+            messages.error(request, "Post not found")
+            return redirect("admin:blog_post_changelist")
+
+        if post.status == Post.status.PUBLISHED:
+            post.status = Post.status.DRAFT
+            messages.success(request, "Post moved to Drafts")
+        else:
+            post.status = Post.status.PUBLISHED
+            messages.success(request, "Post moved to PUBLISHED")
+
+        post.save(update_fields=["status"])
+
+        return redirect("admin:blog_post_changelist")
+
+    actions = [
+        "publish_selected",
+        "move_to_drafts"
+    ]
+
+    @admin.action(description = "Publish selected")
+    def publish_selected(self, request, queryset):
+        updated = queryset.update(status = Post.status.PUBLISHED)
+        messages.success(request, f"{updated} posts updated")
+
+    @admin.action(description = "Move to draft")
+    def move_to_draft(self, request, queryset):
+        updated = queryset.update(status = Post.status.DRAFT)
+        messages.success(request, f"{updated} posts move to draft")
+
+    actions_list = ["publish_all_drafts"]
+
+    @action(
+            description = "publish all drafts.",
+            icon = "publish"
+    )
+    def publish_all_drafts(self, request):
+        updated = Post.objects.filter(
+            status=Post.Status.DRAFT 
+        ).update(status = Post.Status.PUBLISHED)
+
+        messages.success(request, f"{updated} draft post published.")
+
+        return redirect("admin:blog_post_changelist")
+
     def get_queryset(self, request):
         return (
             super().get_queryset(request).annotate(comments_count = Count("comments", distinct = True)).prefetch_related("tags")
         )
+
+    actions_submit_line = ["save_and_publish"]
+
+    @action(
+            description = "Save and Publish",
+            icon = "check",
+            permissions = ["save_and_publish"]
+    )
+    def save_and_publish(self, request, obj):
+        obj.status = Post.Status.PUBLISHED
+        obj.save(updated_fields = ["status"])
+
+    def has_save_and_publish_permission(self, request,object_id):
+        return request.user.is_staff
+
+    
 
     @display(description = "Post", header = True)
     def post_info(self, obj):
