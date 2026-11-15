@@ -58,6 +58,17 @@ QUERIES: dict [int, Callable[..., Any]] = {
     37: queries.search_users_by_full_name,
     38: queries.published_per_month,
     39: queries.posts_with_popularity,
+    40: queries.get_or_create_tag,
+    41: queries.publish_old_drafts,
+    42: queries.tag_category_post,
+    43: queries.merge_categories,
+    44: queries.delete_inactive_users_comments,
+    45: queries.published_feed,
+    46: queries.newest_posts_with_tags,
+    47: queries.categories_with_published_posts,
+    48: queries.posts_with_last_comments,
+    49: queries.posts_witf_staff_comments,
+    50: queries.users_with_draft_as_latest_post,
 }
 
 class Command(BaseCommand):
@@ -217,6 +228,20 @@ class Command(BaseCommand):
             },
             37:{
                 "text": "a"
+            },
+            40: {
+                "name": "Homework Tag"
+            },
+            41: {
+                "days": 30
+            },
+            42: {
+                "category_slug": categories_slugs[0] if categories_slugs else "missing-category",
+                "tag_slug": tag_slugs[0] if tag_slugs else "missing-tag"
+            },
+            43: {
+                "source_slug": categories_slugs[0] if len(categories_slugs) >=2 else "missing-source",
+                "target_slug": categories_slugs[1] if len(categories_slugs) >=2 else "missing-target"
             }
         }
 

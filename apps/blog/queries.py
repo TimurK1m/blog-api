@@ -1,9 +1,10 @@
 from datetime import date, timedelta
 from typing import Optional, Any
 
-from django.db.models import QuerySet, Q, F, Count, Value, Avg, Min, Max, Case, When, CharField
+from django.db.models import QuerySet, Q, F, Count, Value, Avg, Min, Max, Case, When, CharField, Prefetch, OuterRef, Subquery, Exists
 from django.db.models.functions import Coalesce, Concat, TruncMonth
 from django.utils import timezone
+from django.utils.text import slugify
 
 from apps.auths.models import User
 from apps.blog.models import Category, Post, Tag, Comment
@@ -314,4 +315,165 @@ def posts_with_popularity() ->QuerySet[Post]:
             )
         )
         .order_by("-comment_count")
+    )
+
+
+def get_or_create_tag(name:str) -> tuple[Tag, bool]:
+    tag, created = Tag.objects.get_or_create(
+        name = name,
+        defaults={
+            "slug" : slugify(name)
+        }
+    )
+
+    return tag, created
+
+
+def publish_old_drafts(days:int) -> int:
+    date_limit = timezone.now() - timedelta(days=days)
+
+    return Post.objects.filter(
+        status = Post.Status.DRAFT,
+        created_at__lt = date_limit
+    ).update(
+        status = Post.Status.PUBLISHED,
+        updated_at = timezone.now()
+    )
+
+
+def tag_category_post(category_slug: str, tag_slug: str) -> int:
+    posts = Post.objects.filter(category__slug=category_slug)
+    tag = Tag.objects.get(slug = tag_slug)
+    posts_count = posts.count()
+
+    tag.posts.add(*posts)
+
+    return posts_count
+
+
+def merge_categories(source_slug: str, target_slug: str) -> int:
+    if source_slug == target_slug:
+        return 0
+
+    source = Category.objects.get(slug = source_slug)
+    target = Category.objects.get(slug = target_slug)
+
+    moved_count = Post.objects.filter(category = source).update(category = target)
+
+    source.delete()
+
+    return moved_count
+
+
+def delete_inactive_users_comments() ->int:
+    deleted_count, _ = Comment.objects.filter(
+        author__is_active = False
+    ).delete()
+
+
+    return deleted_count
+
+
+def published_feed() -> list[str]:
+    posts = (
+        Post.objects
+        .filter(status = Post.Status.PUBLISHED)
+        .select_related( "author" , "category")
+        .order_by("-created_at")[:50]
+    )
+
+
+    return [
+        (
+            f"{post.title} | "
+            f"{post.author.email} | "
+            f"{post.category.name if post.category else 'Uncategorized'}"
+        )
+        for post in posts
+    ]
+
+
+def newest_posts_with_tags() -> list[str]:
+    posts = (
+        Post.objects
+        .prefetch_related("tags")
+        .order_by("-created_at")[:20]
+    )
+
+    return [
+        f"{post.title}: {','.join(tag.name for tag in post.tags.all())}"
+        for post in posts
+    ]
+
+
+def categories_with_published_posts() -> dict[str, list[str]]:
+    published_posts_queryset = (
+        Post.objects.filter(status = Post.Status.PUBLISHED)
+        .order_by("-created_at")
+    )
+
+    categories = (
+        Category.objects
+        .prefetch_related(
+            Prefetch(
+                "posts",
+                queryset = published_posts_queryset,
+                to_attr="published_posts_list"
+            )
+        )
+        .order_by("name")
+    )
+
+    return {
+        category.name: [
+            post.title for post in category.published_posts_list
+        ]
+        for category in categories
+    }
+
+
+def posts_with_last_comments() ->QuerySet[Post]:
+
+    latest_comment = (
+        Comment.objects
+        .filter(post = OuterRef("pk"))
+        .order_by("-created_at")
+        .values("body")[:1]
+    )
+
+    return (
+        Post.objects
+        .filter(status = Post.Status.PUBLISHED)
+        .annotate(last_comment = Subquery(latest_comment))
+        .order_by("-created_at")
+    )
+
+
+def posts_witf_staff_comments() ->QuerySet[Post]:
+    staff_comments = Comment.objects.filter(
+        post = OuterRef("pk"),
+        author__is_staff = True
+    )
+
+    return (
+        Post.objects
+        .annotate( has_staff_comment = Exists(staff_comments))
+        .filter(has_staff_comment = True)
+        .order_by("-created_at")
+    )
+
+
+def users_with_draft_as_latest_post() -> QuerySet[User]:
+    latest_post = (
+        Post.objects
+        .filter(author = OuterRef("pk"))
+        .order_by("-created_at")
+        .values("status")[:1]
+    )
+
+    return (
+        User.objects
+        .annotate(latest_post_status = Subquery(latest_post))
+        .filter(latest_post_status = Post.Status.DRAFT)
+        .order_by("email")
     )
