@@ -1,6 +1,7 @@
 from typing import Any
 import random
 import time
+from datetime import timedelta
 
 from faker import Faker
 
@@ -8,6 +9,7 @@ from django.core.management.base import BaseCommand, CommandParser, CommandError
 from django.utils.text import slugify
 from django.db import transaction
 from django.contrib.auth.hashers import make_password
+from django.utils import timezone
 
 from apps.blog.models import Category, Tag, Post, Comment
 from apps.auths.models import User
@@ -15,6 +17,11 @@ from apps.auths.models import User
 CREATE_USERS = 20
 CREATE_POSTS = 100
 CREATE_COMMENTS = 500
+
+POST_RANGE = 365
+POST_PERCENTAGE = 0.3
+MIN_EDIT_DAYS = 1
+MAX_EDIT_DAYS = 30
 
 SEED_PASSWORD = "TestPassword123"
 
@@ -271,6 +278,7 @@ class Command(BaseCommand):
                 )
     
                 posts = []
+                now = timezone.now()
     
                 for _ in range(count):
                     title = fake.sentence(nb_words = 6)[:100].rstrip(".")
@@ -311,6 +319,32 @@ class Command(BaseCommand):
                     )
     
                 Post.objects.bulk_create(posts)
+
+                for post in posts:
+                    post.created_at = now - timedelta(
+                         seconds = random.randint(
+                              0,
+                              POST_RANGE *24 *60 *60
+                         )
+                    )
+
+                    if random.random()<POST_PERCENTAGE:
+                        edit_days = random.randint(
+                              MIN_EDIT_DAYS,
+                              MAX_EDIT_DAYS
+                        )
+
+                        post.updated_at = min (
+                            post.created_at + timedelta(days = edit_days),
+                            now
+                            )
+                    else:
+                        post.updated_at = post.created_at
+
+                Post.objects.bulk_update(
+                    posts,
+                    ["created_at","updated_at"]
+                )
     
                 for post in posts:
                     tags_count = random.randint(0, min(5, len(tags)))
@@ -325,6 +359,7 @@ class Command(BaseCommand):
         fake = Faker()
     
         comments = []
+        now = timezone.now()
     
         for _ in range(count):
             sentences_count = random.randint(1, 3)
@@ -340,5 +375,19 @@ class Command(BaseCommand):
         )
     
         Comment.objects.bulk_create(comments)
+
+        for comment in comments:
+            post_created_at = comment.post.created_at
+
+            max_sec = int ((now - post_created_at).total_seconds())
+
+            comment.created_at = post_created_at + timedelta(
+                seconds = random.randint(0, max_sec)
+            )
+
+        Comment.objects.bulk_update(
+            comments,
+            ["created_at",]
+        )
     
         return len(comments)
