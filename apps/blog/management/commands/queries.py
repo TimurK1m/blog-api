@@ -10,8 +10,9 @@ from django.db import connection
 from django.test.utils import CaptureQueriesContext
 from django.utils import timezone
 
-from apps.blog.models import Category, Post
+from apps.blog.models import Category, Post, Tag
 from apps.blog import queries
+from apps.auths.models import User
 
 
 RESULT_LIMIT = 5
@@ -32,6 +33,31 @@ QUERIES: dict [int, Callable[..., Any]] = {
     12: queries.posts_in_month,
     13: queries.posts_last_days,
     14: queries.posts_between,
+    15: queries.author_published_posts,
+    16: queries.posts_with_tag,
+    17: queries.comments_in_category,
+    18: queries.users_with_published_posts,
+    19: queries.posts_without_tags,
+    20: queries.users_without_comments,
+    21: queries.posts_with_both_tags,
+    22: queries.search_posts,
+    23: queries.published_posts_missing_info,
+    24: queries.edited_posts,
+    25: queries.comments_by_post_author,
+    26: queries.comments_before_post,
+    27: queries.published_authors_emails,
+    28: queries.published_posts_overview,
+    29: queries.posts_stats,
+    30: queries.average_comments_per_cost,
+    31: queries.categories_wuth_post_count,
+    32: queries.categories_with_published_count,
+    33: queries.top_authors,
+    34: queries.popular_tags,
+    35: queries.posts_per_status,
+    36: queries.users_activity,
+    37: queries.search_users_by_full_name,
+    38: queries.published_per_month,
+    39: queries.posts_with_popularity,
 }
 
 class Command(BaseCommand):
@@ -117,9 +143,19 @@ class Command(BaseCommand):
         )
 
 
-        categories = list(
+        categories_slugs = list(
             Category.objects.values_list("slug", flat = True)[:2]
         )
+
+        tag_slugs = list(
+            Tag.objects.values_list("slug", flat = True)[:2]
+        )
+
+        published_author_email = (
+            User.objects.filter(post__status = Post.Status.PUBLISHED).values_list("email", flat= True).first()
+        )
+
+
 
         return {
             4: {
@@ -143,7 +179,7 @@ class Command(BaseCommand):
                 "domain": "example.com"
             },
             11: {
-                "slug": categories
+                "slug": categories_slugs
             },
             12: {
                 "year": latest_post_date.year,
@@ -155,6 +191,32 @@ class Command(BaseCommand):
             14: {
                 "start": now.date() - timedelta(days = 365),
                 "end": now.date()
+            },
+            15: {
+                "email": published_author_email or "nobody@example.com"
+            },
+            16: {
+                "tag_slug": tag_slugs[0] if tag_slugs else "non-existent-tag"
+            },
+            17: {
+                "category_slug": (
+                    categories_slugs[0]
+                    if categories_slugs
+                    else "non-existent-category"
+                )
+            },
+            21: {
+                "first_slug": tag_slugs[0] if tag_slugs else "missings-first",
+                "second_slug": tag_slugs[1] if len(tag_slugs) > 1 else "missing-second"
+            },
+            22: {
+                "text":"a"
+            },
+            34: {
+                "min_posts":2
+            },
+            37:{
+                "text": "a"
             }
         }
 
