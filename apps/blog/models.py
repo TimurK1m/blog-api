@@ -4,7 +4,7 @@ from django.conf import settings
 # Create your models here.
 
 class Category(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(unique=True)
 
     class Meta:
@@ -14,7 +14,7 @@ class Category(models.Model):
         return self.name
 
 class Tag(models.Model):
-    name = models.CharField(max_length=100)
+    name = models.CharField(max_length=100, unique=True)
     slug = models.SlugField(unique = True)
 
     def __str__(self):
@@ -30,7 +30,7 @@ class Post(models.Model):
         on_delete=models.CASCADE,
         related_name="post"
     )
-    title=models.CharField(max_length=100)
+    title=models.CharField(max_length=200)
     slug=models.SlugField(unique=True)
     body=models.TextField()
     category=models.ForeignKey(

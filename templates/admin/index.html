@@ -1,0 +1,62 @@
+{% extends "admin/base.html" %}
+{% load unfold %}
+
+{% block content %}
+
+<div class="flex flex-col gap-6">
+
+    <!-- Statistics cards -->
+    <div class="grid grid-cols-1 md:grid-cols-2 xl:grid-cols-4 gap-4">
+
+        {% component "unfold/components/card.html" with title="Total users" %}
+            {% component "unfold/components/title.html" %}
+                {{ total_users }}
+            {% endcomponent %}
+        {% endcomponent %}
+
+        {% component "unfold/components/card.html" with title="Published posts" %}
+            {% component "unfold/components/title.html" %}
+                {{ published_posts }}
+            {% endcomponent %}
+        {% endcomponent %}
+
+        {% component "unfold/components/card.html" with title="Draft posts" %}
+            {% component "unfold/components/title.html" %}
+                {{ draft_posts }}
+            {% endcomponent %}
+        {% endcomponent %}
+
+        {% component "unfold/components/card.html" with title="Total comments" %}
+            {% component "unfold/components/title.html" %}
+                {{ total_comments }}
+            {% endcomponent %}
+        {% endcomponent %}
+
+    </div>
+
+    <!-- Category chart -->
+    {% component "unfold/components/card.html" with title="Posts per category" %}
+        {% component "unfold/components/chart/bar.html" with data=chart_data height=320 %}
+        {% endcomponent %}
+    {% endcomponent %}
+
+    <!-- Top authors -->
+    {% component "unfold/components/card.html" with title="Top 5 authors" %}
+        {% component "unfold/components/table.html" with table=top_authors_table card_included=1 striped=1 %}
+        {% endcomponent %}
+    {% endcomponent %}
+
+    <!-- Publication progress -->
+    {% component "unfold/components/card.html" with title="Publication statistics" %}
+
+        {% component "unfold/components/progress.html" with title="Published" description=published_percent|add:0|floatformat:1|add:"%" value=published_percent %}
+        {% endcomponent %}
+
+        {% component "unfold/components/progress.html" with title="Drafts" description=draft_percent|floatformat:1|add:"%" value=draft_percent %}
+        {% endcomponent %}
+
+    {% endcomponent %}
+
+</div>
+
+{% endblock %}
